@@ -13,11 +13,20 @@
 # Version history
 # Ver   User    Description
 #   1    RGN    Initial Release
+#   2    RGN    Abstracted writing corrected line to a function
 
 
 # We will use a file open dialog
 from tkinter import filedialog
 from tkinter import *
+
+text_marker = "DistanceMeters"
+tag_open = "<" + text_marker + ">"
+tag_close = "</" + text_marker + ">"
+lines_replaced = 0
+use_miles = True
+correction_factor = 1
+
 
 def miles_or_not(question):
     reply = input(question)
@@ -28,6 +37,10 @@ def miles_or_not(question):
     else:
         print("Invalid answer, please answer with a \"y\" or an \"n\"")
         miles_or_not(question)
+
+def write_corrected_line(old_line, new_value, tag_close):
+        new_text = old_line[:old_line.find('>')] + '>' + f'{new_value:.5f}' + tag_close
+        file_dst.write(new_text+'\n')
 
 
 # Ask for TCX file, get path
@@ -42,57 +55,39 @@ new_file_path = new_file_path[:new_file_path.rfind(".")] + '_corrected.' + new_f
 file_ori = open(root.filename,"r")
 file_dst = open(new_file_path, "w")
 
-text_marker = "DistanceMeters"
-tag_open = "<" + text_marker + ">"
-tag_close = "</" + text_marker + ">"
-lines_replaced = 0
-use_miles = True
-
-print("")
 for line in file_ori:
     # Three conditions: Finding DistanceMeters first time, finding subsequent times, and else
     # Set correction factor in first one, write new line. Write new (corrected) line in second case, write line as is in else
     tag_value = line[line.find("<"):line.find(">")+1]
 
     if (tag_value == tag_open) and (lines_replaced == 0):
-
-        meters_found = True
-        
+       
         # Get number between "...>" and "</...."
         meters_orig = float(line[line.find(">")+1:line.find('</')])               # Grab the distance in meters
 
-        use_miles = miles_or_not("Would you like to use miles? (y = miles, n = km): ")
-        divisor = (1609.34 if use_miles else 1000)
+        use_miles = miles_or_not("\nWould you like to use miles? (y = miles, n = km): ")
 
-        distance_orig = meters_orig/divisor
+        distance_orig = meters_orig/(1609.34 if use_miles else 1000)
         print("Original file states you ran %0.2f " % distance_orig + ("miles" if use_miles else "km"))
 
         distance_new = float(input("What is the corrected distance (" + ("miles" if use_miles else "km") +")? "))
         correction_factor = distance_new/distance_orig
         print("The correction factor is %.3f/%.3f = %.3f" % (distance_new, distance_orig, correction_factor))
         
-        new_text = line[:line.find('>')] + '>' + f'{meters_orig*correction_factor:.5f}' + tag_close
-        file_dst.write(new_text+'\n')
+        write_corrected_line(line, meters_orig*correction_factor, tag_close)
         lines_replaced += 1
     
     elif (tag_value == tag_open) and (lines_replaced > 0):
         # This is for all the other times we find "<DistanceMeters>"
         # We just want to replace the number and write that new line out.
-
-        meters_orig = float(line[line.find(">")+1:line.find('</')]) 
-        new_text = line[:line.find('>')] + '>' + f'{meters_orig*correction_factor:.5f}' + tag_close
-        file_dst.write(new_text+'\n')
+        new_value = float(line[line.find(">")+1:line.find('</')])*correction_factor
+        write_corrected_line(line, new_value, tag_close)
         lines_replaced += 1
-        if lines_replaced % 100 == 0:
-            print(".", end='')
-    
     else:
         # All lines that don't have "<DistanceMeters>" - write the line out as is
         file_dst.write(line)
-
 
 file_ori.close()
 file_dst.close()
 print("\n%d lines replaced." % lines_replaced)
 print("New file is " + new_file_path)
-
