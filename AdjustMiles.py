@@ -36,7 +36,7 @@ def miles_or_not(question):
         return False
     else:
         print("Invalid answer, please answer with a \"y\" or an \"n\"")
-        miles_or_not(question)
+        return miles_or_not(question)
 
 def write_corrected_line(old_line, new_value, tag_close):
         new_text = old_line[:old_line.find('>')] + '>' + f'{new_value:.5f}' + tag_close
@@ -66,6 +66,7 @@ for line in file_ori:
         meters_orig = float(line[line.find(">")+1:line.find('</')])               # Grab the distance in meters
 
         use_miles = miles_or_not("\nWould you like to use miles? (y = miles, n = km): ")
+        print(use_miles)
 
         distance_orig = meters_orig/(1609.34 if use_miles else 1000)
         print("Original file states you ran %0.2f " % distance_orig + ("miles" if use_miles else "km"))
