@@ -1,3 +1,23 @@
+# AdjustMiles
+# Rick Nelson
+#
+# This program allows you to adjust the mileage of a TCX file (say, exported from a Garmin activity))
+# It asks for a .tcx file as an input, then finds the first DistanceMeters tag_open, which should be
+# the entire distance ran.
+#
+# The program then asks you for your new distance in miles, and then adjusts that tag_open, and all other
+# DistanceMeters tag_opens, by that correction factor.
+#
+# The output is a new file (originalfile_corrected.txt, same folder) that has all new "tag_valueetched" distances
+#
+# Version history
+# Ver   User    Description
+#   1    RGN    Initial Release
+#   2    RGN    Abstracted writing corrected line to a function
+#   3    RGN    Refactor
+
+
+# We will use a file open dialog
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog
