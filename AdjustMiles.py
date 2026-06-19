@@ -1,93 +1,104 @@
-# AdjustMiles
-# Rick Nelson
-#
-# This program allows you to adjust the mileage of a TCX file (say, exported from a Garmin activity))
-# It asks for a .tcx file as an input, then finds the first DistanceMeters tag_open, which should be
-# the entire distance ran.
-#
-# The program then asks you for your new distance in miles, and then adjusts that tag_open, and all other
-# DistanceMeters tag_opens, by that correction factor.
-#
-# The output is a new file (originalfile_corrected.txt, same folder) that has all new "tag_valueetched" distances
-#
-# Version history
-# Ver   User    Description
-#   1    RGN    Initial Release
-#   2    RGN    Abstracted writing corrected line to a function
-
-
-# We will use a file open dialog
+import tkinter as tk
+from pathlib import Path
 from tkinter import filedialog
-from tkinter import *
 
-text_marker = "DistanceMeters"
-tag_open = "<" + text_marker + ">"
-tag_close = "</" + text_marker + ">"
-lines_replaced = 0
-use_miles = True
-correction_factor = 1
+TEXT_MARKER = "DistanceMeters"
+TAG_OPEN = f"<{TEXT_MARKER}>"
+TAG_CLOSE = f"</{TEXT_MARKER}>"
+METERS_PER_MILE = 1609.34
+METERS_PER_KM = 1000
 
 
-def miles_or_not(question):
-    reply = input(question)
-    if reply[0].lower() == "y":
-        return True
-    elif reply[0].lower() == "n":
-        return False
-    else:
-        print("Invalid answer, please answer with a \"y\" or an \"n\"")
-        miles_or_not(question)
-
-def write_corrected_line(old_line, new_value, tag_close):
-        new_text = old_line[:old_line.find('>')] + '>' + f'{new_value:.5f}' + tag_close
-        file_dst.write(new_text+'\n')
+def ask_yes_no(question):
+    while True:
+        reply = input(question).strip().lower()
+        if reply.startswith("y"):
+            return True
+        if reply.startswith("n"):
+            return False
+        print('Invalid answer, please enter "y" or "n".')
 
 
-# Ask for TCX file, get path
-root = Tk()
-root.filename =  filedialog.askopenfilename(initialdir = ".",title = "Select file",filetypes = [("TCX files","*.tcx")])
+def choose_input_file():
+    root = tk.Tk()
+    root.withdraw()
+    return filedialog.askopenfilename(
+        initialdir=".",
+        title="Select file",
+        filetypes=[("TCX files", "*.tcx")],
+    )
 
-# Set filename to write to. It will take abc.tcx and write to abc_correctd.tcx
-new_file_path = root.filename
-new_file_path = new_file_path[:new_file_path.rfind(".")] + '_corrected.' + new_file_path[new_file_path.rfind(".")+1:]
 
-# Load files
-file_ori = open(root.filename,"r")
-file_dst = open(new_file_path, "w")
+def build_output_path(source_path):
+    path = Path(source_path)
+    return path.with_name(f"{path.stem}_corrected{path.suffix}")
 
-for line in file_ori:
-    # Three conditions: Finding DistanceMeters first time, finding subsequent times, and else
-    # Set correction factor in first one, write new line. Write new (corrected) line in second case, write line as is in else
-    tag_value = line[line.find("<"):line.find(">")+1]
 
-    if (tag_value == tag_open) and (lines_replaced == 0):
-       
-        # Get number between "...>" and "</...."
-        meters_orig = float(line[line.find(">")+1:line.find('</')])               # Grab the distance in meters
+def extract_distance(line):
+    start = line.find(">") + 1
+    end = line.find("</")
+    return float(line[start:end])
 
-        use_miles = miles_or_not("\nWould you like to use miles? (y = miles, n = km): ")
 
-        distance_orig = meters_orig/(1609.34 if use_miles else 1000)
-        print("Original file states you ran %0.2f " % distance_orig + ("miles" if use_miles else "km"))
+def replace_distance_line(line, new_value):
+    start = line.find(">") + 1
+    end = line.find("</")
+    return f"{line[:start]}{new_value:.5f}{line[end:]}"
 
-        distance_new = float(input("What is the corrected distance (" + ("miles" if use_miles else "km") +")? "))
-        correction_factor = distance_new/distance_orig
-        print("The correction factor is %.3f/%.3f = %.3f" % (distance_new, distance_orig, correction_factor))
-        
-        write_corrected_line(line, meters_orig*correction_factor, tag_close)
-        lines_replaced += 1
-    
-    elif (tag_value == tag_open) and (lines_replaced > 0):
-        # This is for all the other times we find "<DistanceMeters>"
-        # We just want to replace the number and write that new line out.
-        new_value = float(line[line.find(">")+1:line.find('</')])*correction_factor
-        write_corrected_line(line, new_value, tag_close)
-        lines_replaced += 1
-    else:
-        # All lines that don't have "<DistanceMeters>" - write the line out as is
-        file_dst.write(line)
 
-file_ori.close()
-file_dst.close()
-print("\n%d lines replaced." % lines_replaced)
-print("New file is " + new_file_path)
+def get_correction_factor(original_meters):
+    use_miles = ask_yes_no("\nWould you like to use miles? (y = miles, n = km): ")
+    unit_name = "miles" if use_miles else "km"
+    meters_per_unit = METERS_PER_MILE if use_miles else METERS_PER_KM
+
+    original_distance = original_meters / meters_per_unit
+    print(f"Original file states you ran {original_distance:.2f} {unit_name}")
+
+    corrected_distance = float(input(f"What is the corrected distance ({unit_name})? "))
+    correction_factor = corrected_distance / original_distance
+
+    print(
+        f"The correction factor is "
+        f"{corrected_distance:.3f}/{original_distance:.3f} = {correction_factor:.3f}"
+    )
+    return correction_factor
+
+
+def process_file(source_path, output_path):
+    correction_factor = None
+    lines_replaced = 0
+
+    with open(source_path, "r") as source_file, open(output_path, "w") as output_file:
+        for line in source_file:
+            opening_tag = line[line.find("<") : line.find(">") + 1]
+
+            if opening_tag != TAG_OPEN:
+                output_file.write(line)
+                continue
+
+            meters = extract_distance(line)
+
+            if correction_factor is None:
+                correction_factor = get_correction_factor(meters)
+
+            output_file.write(replace_distance_line(line, meters * correction_factor))
+            lines_replaced += 1
+
+    return lines_replaced
+
+
+def main():
+    source_path = choose_input_file()
+    if not source_path:
+        print("No file selected.")
+        return
+
+    output_path = build_output_path(source_path)
+    lines_replaced = process_file(source_path, output_path)
+
+    print(f"\n{lines_replaced} lines replaced.")
+    print(f"New file is {output_path}")
+
+
+if __name__ == "__main__":
+    main()
